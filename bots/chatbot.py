@@ -1,5 +1,7 @@
-#BOT para Twitter: Orgullo LGTBI no Orgullo Gay
-#Version 01, capaz de responder a otros perfiles
+# -*- coding: utf-8 -*-
+
+# Bot de ejemplo para Twitter
+# Version 0.1 - Capaz de responder a otros perfiles
 
 import os
 import time
@@ -12,17 +14,15 @@ from markovbot import MarkovBot
 
 # Initialise a MarkovBot instance
 tweetbot = MarkovBot()
-
 # Get the current directory's path
 dirname = os.path.dirname(os.path.abspath(__file__))
 # Construct the path to the book
-#book = os.path.join(dirname, u'Freud_Dream_Psychology.txt')
-book = os.path.join(dirname, u'Manifiesto.txt')
+book = os.path.join(dirname, u'texto_ejemplo.txt')
 # Make your bot read the book!
 tweetbot.read(book)
 
 
-# # # # #
+# # #
 # TEXT GENERATION
 
 # Generate text by using the generate_text method:
@@ -31,14 +31,13 @@ tweetbot.read(book)
 # 	should attempt to use to start its text. It's nothing fancy: the bot will
 # 	simply try the first, and move on to the next if he can't find something
 # 	that works.
-#my_first_text = tweetbot.generate_text(25, seedword=[u'dream', u'psychoanalysis'])
-my_first_text = tweetbot.generate_text(25, seedword=[u'personas', u'derechos', u'igualdad'])
+my_first_text = tweetbot.generate_text(25, seedword=[u'ella', u'Alicia'])
 
 # Print your text to the console
 print(u'\ntweetbot says: "%s"' % (my_first_text))
 
  	
-# # # # #
+# # #
 # TWITTER
 
 # The MarkovBot uses @sixohsix' Python Twitter Tools, which is a Python wrapper
