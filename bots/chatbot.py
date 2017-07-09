@@ -1,13 +1,23 @@
 # -*- coding: utf-8 -*-
 
 # Bot de ejemplo para Twitter
-# Version 0.1 - Capaz de responder a otros perfiles
+# Version 1.0 - Capaz de responder a otros perfiles, con autenticación segura
 
 import os
 import time
+import sys
+import json
 
 from markovbot import MarkovBot
 
+###
+
+# Argumento de entrada: nombre del fichero .json con las credenciales de twitter
+try:
+	text_filename = sys.argv[1]
+except IndexError:
+	print('Error: falta indicar el nombre del fichero .json con las credenciales de twitter')
+	sys.exit(1)
 
 # # # # #
 # INITIALISE
@@ -43,24 +53,16 @@ print(u'\ntweetbot says: "%s"' % (my_first_text))
 # The MarkovBot uses @sixohsix' Python Twitter Tools, which is a Python wrapper
 # for the Twitter API. Find it on GitHub: https://github.com/sixohsix/twitter
 
-# ALL YOUR SECRET STUFF!
-# Make sure to replace the ''s below with your own values, or try to find
-# a more secure way of dealing with your keys and access tokens. Be warned
-# that it is NOT SAFE to put your keys and tokens in a plain-text script!
+# Credentials
 
-# ALL YOUR SECRET STUFF!
-# Consumer Key (API Key)
-cons_key = 'lqzKsFXWmNVQ4awHpAcQWKyAA'
-# Consumer Secret (API Secret)
-cons_secret = 'kSWtbILE83lZmhDIuqF9hrpptoXJTsN77VCif17Y6R3v0zMTON'
-# Access Token
-access_token_secret = 'RJzaXI2rN1V83A6A6ebiNc2BGMOe61b0Mnt6ehbiY0e9u'
-# Access Token Secret
-access_token = '876373402830983168-JdVyA4JD4FkPc2RyefNdG20YN4INlIP'
-
+with open(text_filename, 'r') as f:
+	twitter_credentials = json.load(f)
 
 # Log in to Twitter
-tweetbot.twitter_login(cons_key, cons_secret, access_token, access_token_secret)
+tweetbot.twitter_login(twitter_credentials['consumer_key'], 
+                       twitter_credentials['consumer_secret'], 
+                       twitter_credentials['access_key'], 
+                       twitter_credentials['access_secret'])
 
 # The target string is what the bot will reply to on Twitter. To learn more,
 # read: https://dev.twitter.com/streaming/overview/request-parameters#track
