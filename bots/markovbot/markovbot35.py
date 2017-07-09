@@ -1297,7 +1297,7 @@ class MarkovBot():
 				# Report on the reviving.
 				self._message(u'_cpr', u'_tweetingthread died; trying to revive!')
 				# Restart the Thread.
-				self._tweetingthread = Thread(target=self._autoreply)
+				self._tweetingthread = Thread(target=self._autotweet)
 				self._tweetingthread.daemon = True
 				self._tweetingthread.name = u'autotweeter'
 				self._tweetingthread.start()
