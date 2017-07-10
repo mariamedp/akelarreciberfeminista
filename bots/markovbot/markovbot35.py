@@ -46,16 +46,19 @@ class MarkovBot():
 	post updates to Twitter accounts.
 	"""
 	
-	def __init__(self):
+	def __init__(self, chainlength=3):
 		
 		"""Initialises the bot.
 		"""
+		
+		self.chainlength = chainlength
+		
 		
 		# # # # #
 		# DATA
 
 		# Create an empty dict for the data
-		self.data = {u'default':{}}
+		self.data = {'default':{}}
 		
 
 		# # # # #
@@ -98,7 +101,7 @@ class MarkovBot():
 			self._autoreplythreadlives = True
 			self._autoreplythread = Thread(target=self._autoreply)
 			self._autoreplythread.daemon = True
-			self._autoreplythread.name = u'autoreplier'
+			self._autoreplythread.name = 'autoreplier'
 		else:
 			self._autoreplythreadlives = False
 		
@@ -114,7 +117,7 @@ class MarkovBot():
 			self._tweetingthreadlives = True
 			self._tweetingthread = Thread(target=self._autotweet)
 			self._tweetingthread.daemon = True
-			self._tweetingthread.name = u'autotweeter'
+			self._tweetingthread.name = 'autotweeter'
 		else:
 			self._tweetingthreadlives = False
 		
@@ -123,7 +126,7 @@ class MarkovBot():
 		self._selfexaminationthreadlives = True
 		self._selfexaminationthread = Thread(target=self._self_examination)
 		self._selfexaminationthread.daemon = True
-		self._selfexaminationthread.name = u'selfexaminer'
+		self._selfexaminationthread.name = 'selfexaminer'
 		
 		# Start all Threads.
 		if IMPTWITTER:
@@ -151,10 +154,10 @@ class MarkovBot():
 			try:
 				self.data.pop(database)
 			except KeyError:
-				self._error(u'clear_data', u"There was no database named '%s'" % (database))
+				self._error('clear_data', u"There was no database named '%s'" % (database))
 
 
-	def generate_text(self, maxlength, seedword=None, database=u'default',
+	def generate_text(self, maxlength, seedword=None, database='default',
 		verbose=False, maxtries=100):
 		
 		"""Generates random text based on the provided database.
@@ -179,7 +182,7 @@ class MarkovBot():
 		
 		database		-	A string that indicates the name of the
 						specific database that you want to use to
-						generate the text, or u'default' to use the
+						generate the text, or 'default' to use the
 						default database. (default = 'default')
 
 		verbose		-	Boolean that indicates whether this function
@@ -201,7 +204,7 @@ class MarkovBot():
 		
 		# Raise an Exception when no data exists
 		if self.data[database] == {}:
-			self._error(u'generate_text', u"No data is available yet in database '%s'. Did you read any data yet?" % (database))
+			self._error('generate_text', u"No data is available yet in database '%s'. Did you read any data yet?" % (database))
 		
 		# Sometimes, for mysterious reasons, a word duo does not appear as a
 		# key in the database. This results in a KeyError, which is highly
@@ -219,70 +222,68 @@ class MarkovBot():
 		while error:
 			
 			try:
-				# Get all word duos in the database
+				# Get all word (n-1)-tuples in the database
 				keys = self.data[database]
-				key_list=list(keys)
-				#print(key_list)
-				#print(keys)
-				# Shuffle the word duos, so that not the same is
+				key_list = list(keys)
+				# Shuffle the word (n-1)-tuples, so that not the same is
 				# found every time
 				random.shuffle(list(keys))
 				
 				# Choose a random seed to fall back on when seedword does
 				# not occur in the keys, or if seedword==None
 				seed = random.randint(0, len(list(keys)))
-				w1, w2 = key_list[seed]
+				word_key = key_list[seed]
 				
 				# Try to find a word duo that contains the seed word
 				if seedword != None:
 					# Loop through all potential seed words
 					while len(seedword) > 0:
-						# Loop through all keys (these are (w1,w2)
+						# Loop through all keys (these are (w1,w2,...,w(n-1))
 						# tuples of words that occurred together in the
-						# text used to generate the database
-						for i in range(len(keys)):
+						# text used to generate the database)
+						for i in range(len(key_list)):
 							# If the seedword is only one word, check
-							# if it is part of the key (a word duo)
+							# if it is part of the key (a word tuple)
 							# If the seedword is a combination of words,
-							# check if they are the same as the key
-							if seedword[0] in keys[i] or \
-								(tuple(seedword[0].split(u' ')) == \
-								keys[i]):
+							# check if they are placed consecutively in the key
+							key_str = ' '.join(key_list[i])
+							if key_str.startswith(seedword[0] + ' ') \
+								or key_str.endswith(' ' + seedword[0]) \
+								or (' ' + seedword[0] + ' ') in key_str:
 								# Choose the words
-								w1, w2 = keys[i]
+								word_key = key_list[i]
 								# Get rid of the seedwords
 								seedword = []
 								break
 						# Get rid of the first keyword, if it was not
-						# found in the word duos
+						# found in the word tuples
 						if len(seedword) > 0:
 							seedword.pop(0)
 				
-				# Empty list to contain the generated words
-				words = []
+				# Generated words begin with those forming the key
+				words = list(word_key)
 				
 				# Loop to get as many words as requested
-				for i in range(maxlength):
-					# Add the current first word
-					words.append(w1)
-					# Generare a new first and second word, based on the
-					# database. Each key is a (w1,w2 tuple that points to
-					# a list of words that can follow the (w1, w2) word
+				for i in range(maxlength - len(word_key)):
+					# Generate a new word, based on the database.
+					# Each key is a (n-1)-tuple that points to
+					# a list of words that can follow the key word
 					# combination in the studied text. A random word from
 					# this list is selected. Note: words can occur more
 					# than once in this list, thus more likely word
 					# combinations are more likely to be selected here.
-					w1, w2 = w2, random.choice(self.data[database][(w1, w2)])
-				
-				# Add the final word to the generated words
-				words.append(w2)
+					next_word = random.choice(self.data[database][word_key])
+					# Add the new word
+					words.append(next_word)
+					# Update key
+					word_key = word_key[1:] + (next_word,)
 				
 				# Capitalise the first word, capitalise all single 'i's,
 				# and attempt to capitalise letters that occur after a
 				# full stop.
 				for i in range(0, len(words)):
-					if (i == 0) or (u'.' in words[i-1]) or \
-						(words[i] == u'i'):
+					if (i == 0) or ('.' in words[i-1]) or \
+						(words[i] == 'i'):
 						words[i] = words[i].capitalize()
 				
 				# Find the last acceptable interpunction by looping
@@ -296,11 +297,11 @@ class MarkovBot():
 					# current as the last word. If the interpunction
 					# is not appropriate for ending a sentence with,
 					# change it to a full stop.
-					if words[i][-1] in [u'.', u'!', u'?']:
+					if words[i][-1] in ['.', '!', '?']:
 						ei = i+1
-					elif words[i][-1] in [u',', u';', u':']:
+					elif words[i][-1] in [',', ';', ':']:
 						ei = i+1
-						words[i][-1] = u'.'
+						words[i] = words[i][:-1] + '.'
 					# Break if we found a word with interpunction.
 					if ei > 0:
 						break
@@ -308,9 +309,9 @@ class MarkovBot():
 				words = words[:ei]
 
 				# Combine the words into one big sentence
-				sentence = u' '.join(words)
+				sentence = ' '.join(words)
 
-				if sentence != u'':
+				if sentence != '':
 					error = False
 				
 			# If the above code fails
@@ -319,11 +320,11 @@ class MarkovBot():
 				attempts += 1
 				# Report the error to the console
 				if verbose:
-					self._message(u'generate_text', u"Ran into a bit of an error while generating text. Will make %d more attempts" % (maxtries-attempts))
+					self._message('generate_text', u"Ran into a bit of an error while generating text. Will make %d more attempts" % (maxtries-attempts))
 				# If too many attempts were made, raise an error to stop
 				# making any further attempts
 				if attempts >= maxtries:
-					self._error(u'generate_text', u"Made %d attempts to generate text, but all failed. " % (attempts))
+					self._error('generate_text', u"Made %d attempts to generate text, but all failed. " % (attempts))
 		
 		return sentence
 	
@@ -339,11 +340,11 @@ class MarkovBot():
 		"""
 	
 		# Store the database in a pickle file
-		with open(filename, u'wb') as f:
+		with open(filename, 'wb') as f:
 			pickle.dump(self.data, f)
 		
 	
-	def read(self, filename, database=u'default', overwrite=False):
+	def read(self, filename, database='default', overwrite=False):
 		
 		"""Reads a text, and adds its stats to the internal data. Use the
 		mode keyword to overwrite the existing data, or to add the new
@@ -360,7 +361,7 @@ class MarkovBot():
 		
 		database		-	A string that indicates the name of the
 						specific database that you want to add the
-						file's data to, or u'default' to add to the
+						file's data to, or 'default' to add to the
 						default database. (default = 'default')
 
 		overwrite		-	Boolean that indicates whether the existing data
@@ -374,41 +375,38 @@ class MarkovBot():
 		
 		# Check whether the file exists
 		if not self._check_file(filename):
-			self._error(u'read', u"File does not exist: '%s'" % (filename))
+			self._error('read', "File does not exist: '%s'" % (filename))
 		
 		# Read the words from the file as one big string
-		with open(filename, u'r') as f:
+		with open(filename, 'r', encoding='utf-8') as f:
 			# Read the contents of the file
 			contents = f.read()
-		# Unicodify the contents
-		contents = contents
-		#.decode(u'utf-8')
 		
 		# Split the words into a list
 		words = contents.split()
 		
 		# Create a new database if this is required.
 		if not database in self.data.keys():
-			self._message(u'read', \
+			self._message('read', \
 			u"Creating new database '%s'" % (database))
 			self.data[database] = {}
 		
 		# Add the words and their likely following word to the database
-		for w1, w2, w3 in self._triples(words):
+		for word_tuple in self._ntuples(words, n=self.chainlength):
 			# Only use actual words and words with minimal interpunction
-			if self._isalphapunct(w1) and self._isalphapunct(w2) and \
-				self._isalphapunct(w3):
-				# The key is a duo of words
-				key = (w1, w2)
+			if all(self._isalphapunct(w) for w in word_tuple):
+				# The last word is excluded and the rest of them from the key
+				lastword = word_tuple[-1]
+				key = word_tuple[:-1]
 				# Check if the key is already part of the database dict
 				if key in self.data[database]:
 					# If the key is already in the database dict,
 					# add the third word to the list
-					self.data[database][key].append(w3)
+					self.data[database][key].append(lastword)
 				else:
 					# If the key is not in the database dict yet, first
 					# make a new list for it, and then add the new word
-					self.data[database][key] = [w3]
+					self.data[database][key] = [lastword]
 	
 	
 	def read_pickle_data(self, filename, overwrite=False):
@@ -428,12 +426,12 @@ class MarkovBot():
 		"""
 	
 		# Check whether the file exists
-		if not self._check_file(filename, allowedext=[u'.pickle', u'.dat']):
-			self._error(u'read_pickle_data', \
+		if not self._check_file(filename, allowedext=['.pickle', '.dat']):
+			self._error('read_pickle_data', \
 				u"File does not exist: '%s'" % (filename))
 		
 		# Load a database from a pickle file
-		with open(filename, u'rb') as f:
+		with open(filename, 'rb') as f:
 			data = pickle.load(f)
 		
 		# Store the data internally
@@ -483,25 +481,25 @@ class MarkovBot():
 		
 		# Check if the 'simpleresponse' database already exists, and
 		# create it if necessary.
-		if not u'simpleresponse' in self.data.keys():
-			self.data[u'simpleresponse'] = {}
+		if not 'simpleresponse' in self.data.keys():
+			self.data['simpleresponse'] = {}
 		
 		# Overwrite the database if requested.
 		if overwrite:
-			self.data[u'simpleresponse'] = {}
+			self.data['simpleresponse'] = {}
 		
 		# Go through the passed respdict, and add its content to the
 		# database.
 		for targetstring in respdict.keys():
 			# Skip non-text values.
 			if type(targetstring) not in [str]:
-				self._message(u'set_simple_responses', \
+				self._message('set_simple_responses', \
 					u"Key '%s' in passed respdict is not a string or unicode type, and thus will not be included in the database." % (targetstring))
 				continue
 			# Check if the value for this targetstring is text.
 			if type(respdict[targetstring]) in [str]:
 				# Convert to a tuple, and add to the database.
-				self.data[u'simpleresponse'][targetstring] = \
+				self.data['simpleresponse'][targetstring] = \
 					(respdict[targetstring])
 			# Check if the value for this targetstring is a list or a
 			# tuple.
@@ -509,15 +507,15 @@ class MarkovBot():
 				# Copy the values, convert them all to unicode.
 				responses = map(str, list(respdict[targetstring]))
 				# Add the responses to the database.
-				self.data[u'simpleresponse'][targetstring] = \
+				self.data['simpleresponse'][targetstring] = \
 					tuple(responses)
 			# For any other data type, report a warning.
 			else:
-				self._message(u'set_simple_responses', \
+				self._message('set_simple_responses', \
 					u"Key '%s' in passed respdict points to invalid data. Values need to be of type str, unicode, list, or tuple." % (targetstring))
 	
 	
-	def twitter_autoreply_start(self, targetstring, database=u'default',
+	def twitter_autoreply_start(self, targetstring, database='default',
 		keywords=None, prefix=None, suffix=None, maxconvdepth=None,
 		mindelay=1.5):
 		
@@ -539,7 +537,7 @@ class MarkovBot():
 						specific database that you want to use to
 						generate tweets, or a list of database names
 						from which one will be selected at random,
-						or u'default' to use the default database.
+						or 'default' to use the default database.
 						You can also use the string 'auto-language'
 						to make the bot automatically detect the
 						language of Tweets, and to reply using a
@@ -604,15 +602,15 @@ class MarkovBot():
 		
 		# Raise an Exception if the twitter library wasn't imported
 		if not IMPTWITTER:
-			self._error(u'twitter_autoreply_start', \
+			self._error('twitter_autoreply_start', \
 				u"The 'twitter' library could not be imported. Check whether it is installed correctly.")
 		
 		# Raise an Exception if the passed intended database is
 		# 'simpleresponse' and the targetstring is not in the keys of the
 		# 'simpleresponse' database.
-		if database == u'simpleresponse':
-			if targetstring not in self.data[u'simpleresponse'].keys():
-				self._error(u'twitter_autoreply_start', \
+		if database == 'simpleresponse':
+			if targetstring not in self.data['simpleresponse'].keys():
+				self._error('twitter_autoreply_start', \
 					u"Targetstring '%s' was not found in the 'simpleresponse' database. Use the set_simple_responses function to add simple responses." % (targetstring))
 		
 		# Update the autoreply parameters
@@ -639,7 +637,7 @@ class MarkovBot():
 		
 		# Raise an Exception if the twitter library wasn't imported
 		if not IMPTWITTER:
-			self._error(u'twitter_autoreply_stop', \
+			self._error('twitter_autoreply_stop', \
 				u"The 'twitter' library could not be imported. Check whether it is installed correctly.")
 		
 		# Update the autoreply parameters
@@ -673,7 +671,7 @@ class MarkovBot():
 		
 		# Raise an Exception if the twitter library wasn't imported
 		if not IMPTWITTER:
-			self._error(u'twitter_login', u"The 'twitter' library could not be imported. Check whether it is installed correctly.")
+			self._error('twitter_login', u"The 'twitter' library could not be imported. Check whether it is installed correctly.")
 		
 		# Log in to a Twitter account
 		self._oauth = twitter.OAuth(access_token, access_token_secret, \
@@ -686,7 +684,7 @@ class MarkovBot():
 		self._credentials = self._t.account.verify_credentials()
 	
 	
-	def twitter_tweeting_start(self, database=u'default', days=1, hours=0, \
+	def twitter_tweeting_start(self, database='default', days=1, hours=0, \
 		minutes=0, jitter=0, keywords=None, prefix=None, suffix=None):
 		
 		"""Periodically posts a new tweet with generated text. You can
@@ -701,7 +699,7 @@ class MarkovBot():
 						specific database that you want to use to
 						generate tweets, or a list of database names
 						from which one will be selected at random,
-						or u'default' to use the default database.
+						or 'default' to use the default database.
 						You can also use the string 'random-database'
 						to select one of the non-empty databases
 						that are available to this bot. Default
@@ -742,7 +740,7 @@ class MarkovBot():
 		
 		# Raise an Exception if the twitter library wasn't imported
 		if not IMPTWITTER:
-			self._error(u'twitter_tweeting_start', \
+			self._error('twitter_tweeting_start', \
 				u"The 'twitter' library could not be imported. Check whether it is installed correctly.")
 		
 		# Clean up the values
@@ -778,7 +776,7 @@ class MarkovBot():
 		
 		# Raise an Exception if the twitter library wasn't imported
 		if not IMPTWITTER:
-			self._error(u'twitter_tweeting_stop', \
+			self._error('twitter_tweeting_stop', \
 				u"The 'twitter' library could not be imported. Check whether it is installed correctly.")
 
 		# Update the autotweeting parameters
@@ -839,7 +837,7 @@ class MarkovBot():
 					# StopIteration Exception every now and again.)
 					try:
 						# Attempt to get the next tweet.
-						tweet = iterator.next()
+						tweet = next(iterator)
 					except StopIteration:
 						# Restart the iterator, and skip the rest of
 						# the loop.
@@ -848,7 +846,7 @@ class MarkovBot():
 					
 					# Restart the connection if this is a 'hangup'
 					# notification, which will be {'hangup':True}
-					if u'hangup' in tweet.keys():
+					if 'hangup' in tweet.keys():
 						# Reanimate the Twitter connection.
 						self._twitter_reconnect()
 						# Skip further processing.
@@ -867,36 +865,36 @@ class MarkovBot():
 						continue
 
 					# Report to console
-					self._message(u'_autoreply', u"I've found a new tweet!")
+					self._message('_autoreply', u"I've found a new tweet!")
 					try:
-						self._message(u'_autoreply', u'%s (@%s): %s' % \
-							(tweet[u'user'][u'name'], \
-							tweet[u'user'][u'screen_name'], tweet[u'text']))
+						self._message('_autoreply', '%s (@%s): %s' % \
+							(tweet['user']['name'], \
+							tweet['user']['screen_name'], tweet['text']))
 					except:
-						self._message(u'_autoreply', \
-							u'Failed to report on new Tweet :(')
+						self._message('_autoreply', \
+							'Failed to report on new Tweet :(')
 					
 					# Don't reply to this bot's own tweets
-					if tweet[u'user'][u'id_str'] == self._credentials[u'id_str']:
+					if tweet['user']['id_str'] == self._credentials['id_str']:
 						# Skip one cycle, which will bring us to the
 						# next tweet
-						self._message(u'_autoreply', \
+						self._message('_autoreply', \
 							u"This tweet was my own, so I won't reply!")
 						continue
 					
 					# Don't reply to retweets
-					if u'retweeted_status' in tweet.keys():
+					if 'retweeted_status' in tweet.keys():
 						# Skip one cycle, which will bring us to the
 						# next tweet
-						self._message(u'_autoreply', \
+						self._message('_autoreply', \
 							u"This was a retweet, so I won't reply!")
 						continue
 
 					# Don't reply to tweets that are in the nono-list
-					if tweet[u'id_str'] in self._nonotweets:
+					if tweet['id_str'] in self._nonotweets:
 						# Skip one cycle, which will bring us to the
 						# next tweet
-						self._message(u'_autoreply', \
+						self._message('_autoreply', \
 							u"This tweet was in the nono-list, so I won't reply!")
 						continue
 
@@ -904,7 +902,7 @@ class MarkovBot():
 					if self._maxconvdepth != None:
 						# Get the ID of the tweet that the current tweet
 						# was a reply to
-						orid = tweet[u'in_reply_to_status_id_str']
+						orid = tweet['in_reply_to_status_id_str']
 						# Keep digging through the tweets until the the
 						# top-level tweet is found, or until we pass the
 						# maximum conversation depth
@@ -914,7 +912,7 @@ class MarkovBot():
 							# the current tweet was a reply. Increase
 							# the reply counter by one.
 							ortweet = self._t.statuses.show(id=orid)
-							orid = ortweet[u'in_reply_to_status_id_str']
+							orid = ortweet['in_reply_to_status_id_str']
 							counter += 1
 							# Stop counting when the current value
 							# exceeds the maximum allowed depth
@@ -932,89 +930,89 @@ class MarkovBot():
 						# tweets that it shouldn't reply to
 						if counter >= self._maxconvdepth or \
 							orid in self._nonotweets:
-							self._message(u'_autoreply', \
+							self._message('_autoreply', \
 								u"This tweet is part of a conversation, and I don't reply to conversations with over %d tweets." % (self._maxconvdepth))
 							continue
 					
 					# Detect the language of the tweet, if the
 					# language of the reply depends on it.
-					if self._autoreply_database == u'auto-language':
+					if self._autoreply_database == 'auto-language':
 						# Get the language of the tweet, or default
 						# to English if it isn't available.
-						if u'lang' in tweet.keys():
-							lang = tweet[u'lang'].lower()
-							self._message(u'_autoreply', u"I detected language: '%s'." % (lang))
+						if 'lang' in tweet.keys():
+							lang = tweet['lang'].lower()
+							self._message('_autoreply', u"I detected language: '%s'." % (lang))
 						else:
-							lang = u'en'
-							self._message(u'_autoreply', u"I couldn't detect the language, so I defaulted to '%s'." % (lang))
+							lang = 'en'
+							self._message('_autoreply', u"I couldn't detect the language, so I defaulted to '%s'." % (lang))
 						# Check if the language is available in the
 						# existing dicts. Select the associated
 						# database, or default to English when the
 						# detected language isn't available, or
-						# default to u'default' when English is not
+						# default to 'default' when English is not
 						# available.
 						if lang in self.data.keys():
 							database = lang
-							self._message(u'_autoreply', u"I chose database: '%s'." % (database))
-						elif u'en' in self.data.keys():
-							database = u'en'
-							self._message(u'_autoreply', u"There was no database for detected language '%s', so I defaulted to '%s'." % (lang, database))
+							self._message('_autoreply', u"I chose database: '%s'." % (database))
+						elif 'en' in self.data.keys():
+							database = 'en'
+							self._message('_autoreply', u"There was no database for detected language '%s', so I defaulted to '%s'." % (lang, database))
 						else:
-							database = u'default'
-							self._message(u'_autoreply', u"There was no database for detected language '%s', nor for 'en', so I defaulted to '%s'." % (lang, database))
+							database = 'default'
+							self._message('_autoreply', u"There was no database for detected language '%s', nor for 'en', so I defaulted to '%s'." % (lang, database))
 					# Randomly choose a database if a random database
 					# was requested. Never use an empty database,
 					# though (the while loop prevents this).
-					elif self._autoreply_database == u'random-database':
+					elif self._autoreply_database == 'random-database':
 						database = random.choice(self.data.keys())
-						while self.data[database] == {} or database == u'simplereply':
+						while self.data[database] == {} or database == 'simplereply':
 							database = random.choice(self.data.keys())
-						self._message(u'_autoreply', \
-							u'Randomly chose database: %s' % (database))
+						self._message('_autoreply', \
+							'Randomly chose database: %s' % (database))
 					# Randomly choose a database out of a list of
 					# potential databases.
 					elif type(self._autoreply_database) in [list, tuple]:
 						database = random.choice(self._autoreply_database)
-						self._message(u'_autoreply', \
-							u'Randomly chose database: %s' % (database))
+						self._message('_autoreply', \
+							'Randomly chose database: %s' % (database))
 					# Use the preferred database.
 					elif type(self._autoreply_database) in [str]:
 						database = copy.deepcopy(self._autoreply_database)
-						self._message(u'_autoreply', \
-							u'Using database: %s' % (database))
+						self._message('_autoreply', \
+							'Using database: %s' % (database))
 					# If none of the above options apply, default to
 					# the default database.
 					else:
-						database = u'default'
-						self._message(u'_autoreply', \
-							u'Defaulted to database: %s' % (database))
+						database = 'default'
+						self._message('_autoreply', \
+							'Defaulted to database: %s' % (database))
 					
 					# If the selected database is not a string, or if
 					# it is empty, then fall back on the default
 					# database.
 					if type(database) not in [str]:
-						self._message(u'_autoreply', \
-							u"Selected database '%s' is invalid, defaulting to: %s" % (database, u'default'))
-						database = u'default'
+						self._message('_autoreply', \
+							u"Selected database '%s' is invalid, defaulting to: %s" % (database, 'default'))
+						database = 'default'
 					elif database not in self.data.keys():
-						self._message(u'_autoreply', \
-							u"Selected database '%s' does not exist, defaulting to: %s" % (database, u'default'))
-						database = u'default'
+						self._message('_autoreply', \
+							u"Selected database '%s' does not exist, defaulting to: %s" % (database, 'default'))
+						database = 'default'
 					elif self.data[database] == {}:
-						self._message(u'_autoreply', \
-							u"Selected database '%s' is empty, defaulting to: %s" % (database, u'default'))
-						database = u'default'
+						self._message('_autoreply', \
+							u"Selected database '%s' is empty, defaulting to: %s" % (database, 'default'))
+						database = 'default'
 
 					# Separate the words in the tweet
-					tw = tweet[u'text'].split()
+					tw = tweet['text'].split()
 					# Clean up the words in the tweet
 					for i in range(len(tw)):
 						# Remove clutter
-						tw[i] = tw[i].replace(u'@',u''). \
-							replace(u'#',u'').replace(u'.',u''). \
-							replace(u',',u'').replace(u';',u''). \
-							replace(u':',u'').replace(u'!',u''). \
-							replace(u'?',u'').replace(u"'",u'')
+						tw[i] = tw[i].replace('@',''). \
+							replace('#','').replace('.',''). \
+							replace(',','').replace(';',''). \
+							replace(':','').replace('!',''). \
+							replace('?','').replace(u"'",'')
 
 					# Make a list of potential seed words in the tweet
 					seedword = []
@@ -1029,28 +1027,28 @@ class MarkovBot():
 					if len(seedword) == 0:
 						seedword = None
 					# Report back on the chosen keyword
-					self._message(u'_autoreply', u"I found seedwords: '%s'." % (seedword))
+					self._message('_autoreply', u"I found seedwords: '%s'." % (seedword))
 
 					# Construct a prefix for this tweet, which should
 					# include the handle ('@example') of the sender
 					if self._tweetprefix == None:
-						prefix = u'@%s' % (tweet[u'user'][u'screen_name'])
+						prefix = '@%s' % (tweet['user']['screen_name'])
 					else:
 						# Use the specified prefix.
 						if type(self._tweetprefix) in [str]:
-							prefix = u'@%s %s' % \
-								(tweet[u'user'][u'screen_name'], \
+							prefix = '@%s %s' % \
+								(tweet['user']['screen_name'], \
 								self._tweetprefix)
 						# Randomly choose one of the specified
 						# prefixes.
 						elif type(self._tweetprefix) in [list, tuple]:
-							prefix = u'@%s %s' % \
-								(tweet[u'user'][u'screen_name'], \
+							prefix = '@%s %s' % \
+								(tweet['user']['screen_name'], \
 								random.choice(self._tweetprefix))
 						# Fall back on the default option.
 						else:
-							prefix = u'@%s' % (tweet[u'user'][u'screen_name'])
-							self._message(u'_autoreply', \
+							prefix = '@%s' % (tweet['user']['screen_name'])
+							self._message('_autoreply', \
 								u"Could not recognise the type of prefix '%s'; using no prefix." % (self._tweetprefix))
 
 					# Construct a suffix for this tweet. We use the
@@ -1065,14 +1063,14 @@ class MarkovBot():
 						suffix = random.choice(self._tweetsuffix)
 					else:
 						suffix = None
-						self._message(u'_autoreply', \
+						self._message('_autoreply', \
 							u"Could not recognise the type of suffix '%s'; using no suffix." % (self._tweetsuffix))
 
 					# If the database is set to 'simpleresponse',
 					# choose a tweet from the simpleresponse database.
-					if database == u'simpleresponse':
-						response = u'%s %s %s' \
-							% (prefix, random.choice(self.data[u'simpleresponse'][self._targetstring]), suffix)
+					if database == 'simpleresponse':
+						response = '%s %s %s' \
+							% (prefix, random.choice(self.data['simpleresponse'][self._targetstring]), suffix)
 						if len(response) > 140:
 							response = response[:140]
 
@@ -1088,17 +1086,17 @@ class MarkovBot():
 					try:
 						# Post a new tweet
 						resp = self._t.statuses.update(status=response,
-							in_reply_to_status_id=tweet[u'id_str'],
-							in_reply_to_user_id=tweet[u'user'][u'id_str'],
-							in_reply_to_screen_name=tweet[u'user'][u'screen_name']
+							in_reply_to_status_id=tweet['id_str'],
+							in_reply_to_user_id=tweet['user']['id_str'],
+							in_reply_to_screen_name=tweet['user']['screen_name']
 							)
 						# Report to the console
-						self._message(u'_autoreply', u'Posted reply: %s' % (response))
+						self._message('_autoreply', 'Posted reply: %s' % (response))
 						# Store a copy of the latest outgoing tweet, for
 						# debugging purposes
 						self._lasttweetout = copy.deepcopy(resp)
 					except e:
-						self._error(u'_autoreply', u"Failed to post a reply: '%s'" % (e))
+						self._error('_autoreply', u"Failed to post a reply: '%s'" % (e))
 					# Release the twitter lock
 					self._tlock.release()
 					
@@ -1143,12 +1141,12 @@ class MarkovBot():
 				
 				# Choose the database to use. If the database should be
 				# random, then randomly choose a non-empty database.
-				if self._tweetingdatabase == u'random-database':
+				if self._tweetingdatabase == 'random-database':
 					database = random.choice(self.data.keys())
-					while self.data[database] == {} or database == u'simpleresponse':
+					while self.data[database] == {} or database == 'simpleresponse':
 						database = random.choice(self.data.keys())
-					self._message(u'_autotweet', \
-						u'Randomly chose database: %s' % (database))
+					self._message('_autotweet', \
+						'Randomly chose database: %s' % (database))
 				# If the database is a list of alternatives, randomly
 				# select one.
 				elif type(self._tweetingdatabase) in [list, tuple]:
@@ -1158,9 +1156,9 @@ class MarkovBot():
 					database = copy.deepcopy(self._tweetingdatabase)
 				# Fall back on the default option.
 				else:
-					self._message(u'_autotweet', \
-						u"Could not recognise the type of database '%s'; using '%s' instead." % (self._tweetingdatabase, u'default'))
-					database = u'default'
+					self._message('_autotweet', \
+						u"Could not recognise the type of database '%s'; using '%s' instead." % (self._tweetingdatabase, 'default'))
+					database = 'default'
 
 				# Construct a prefix for this tweet. We use the
 				# specified prefix, which can also be None. Or
@@ -1174,7 +1172,7 @@ class MarkovBot():
 					prefix = random.choice(self._tweetingprefix)
 				else:
 					prefix = None
-					self._message(u'_autotweet', \
+					self._message('_autotweet', \
 						u"Could not recognise the type of prefix '%s'; using no suffix." % (self._tweetingprefix))
 
 				# Construct a suffix for this tweet. We use the
@@ -1189,7 +1187,7 @@ class MarkovBot():
 					suffix = random.choice(self._tweetingsuffix)
 				else:
 					suffix = None
-					self._message(u'_autotweet', \
+					self._message('_autotweet', \
 						u"Could not recognise the type of suffix '%s'; using no suffix." % (self._tweetingsuffix))
 
 				# Construct a new tweet
@@ -1203,8 +1201,8 @@ class MarkovBot():
 					# Post a new tweet
 					tweet = self._t.statuses.update(status=newtweet)
 					# Report to the console
-					self._message(u'_autotweet', \
-						u'Posted tweet: %s' % (newtweet))
+					self._message('_autotweet', \
+						'Posted tweet: %s' % (newtweet))
 					# Store a copy of the latest outgoing tweet, for
 					# debugging purposes
 					self._lasttweetout = copy.deepcopy(tweet)
@@ -1216,13 +1214,13 @@ class MarkovBot():
 						# Post a new tweet
 						tweet = self._t.statuses.update(status=newtweet)
 						# Report to the console
-						self._message(u'_autotweet', \
-							u'Posted tweet: %s' % (newtweet))
+						self._message('_autotweet', \
+							'Posted tweet: %s' % (newtweet))
 						# Store a copy of the latest outgoing tweet,
 						# for debugging purposes
 						self._lasttweetout = copy.deepcopy(tweet)
 					except Exception as e:
-						self._error(u'_autotweet', u"Failed to post a tweet! Error: '%s'" % (e))
+						self._error('_autotweet', u"Failed to post a tweet! Error: '%s'" % (e))
 				# Release the twitter lock
 				self._tlock.release()
 				
@@ -1232,8 +1230,8 @@ class MarkovBot():
 				interval = self._tweetinginterval + jitter
 				
 				# Sleep for the interval (in seconds, hence * 60)
-				self._message(u'_autotweet', \
-					u'Next tweet in %d minutes.' % (interval))
+				self._message('_autotweet', \
+					'Next tweet in %d minutes.' % (interval))
 				time.sleep(interval*60)
 
 
@@ -1281,45 +1279,45 @@ class MarkovBot():
 			# Check if the Thread is still alive.
 			if not self._autoreplythread.is_alive():
 				# Report on the reviving.
-				self._message(u'_cpr', u'_autoreplythread died; trying to revive!')
+				self._message('_cpr', '_autoreplythread died; trying to revive!')
 				# Restart the Thread.
 				self._autoreplythread = Thread(target=self._autoreply)
 				self._autoreplythread.daemon = True
-				self._autoreplythread.name = u'autoreplier'
+				self._autoreplythread.name = 'autoreplier'
 				self._autoreplythread.start()
 				# Report on success!
-				self._message(u'_cpr', u'Succesfully restarted _autoreplythread!')
+				self._message('_cpr', 'Succesfully restarted _autoreplythread!')
 
 		# Check on the tweeting Thread.
 		if self._tweetingthreadlives:
 			# Check if the Thread is still alive.
 			if not self._tweetingthread.is_alive():
 				# Report on the reviving.
-				self._message(u'_cpr', u'_tweetingthread died; trying to revive!')
+				self._message('_cpr', '_tweetingthread died; trying to revive!')
 				# Restart the Thread.
-				self._tweetingthread = Thread(target=self._autoreply)
+				self._tweetingthread = Thread(target=self._autotweet)
 				self._tweetingthread.daemon = True
-				self._tweetingthread.name = u'autotweeter'
+				self._tweetingthread.name = 'autotweeter'
 				self._tweetingthread.start()
 				# Report on success!
-				self._message(u'_cpr', u'Succesfully restarted _tweetingthread!')
+				self._message('_cpr', 'Succesfully restarted _tweetingthread!')
 
 		# Check on the self-examination Thread.
 		if self._selfexaminationthreadlives:
 			# Check if the Thread is still alive.
 			if not self._selfexaminationthread.is_alive():
 				# Report on the reviving.
-				self._message(u'_cpr', u'Ironically, _selfexaminationthread died; trying to revive!')
+				self._message('_cpr', 'Ironically, _selfexaminationthread died; trying to revive!')
 				# Restart the Thread.
 				self._selfexaminationthread = Thread(self._self_examination)
 				self._selfexaminationthread.daemon = True
-				self._selfexaminationthread.name = u'selfexaminer'
+				self._selfexaminationthread.name = 'selfexaminer'
 				self._selfexaminationthread.start()
 				# Report on success!
-				self._message(u'_cpr', u'Succesfully restarted _selfexaminationthread!')
+				self._message('_cpr', 'Succesfully restarted _selfexaminationthread!')
 
 	
-	def _construct_tweet(self, database=u'default', seedword=None, \
+	def _construct_tweet(self, database='default', seedword=None, \
 		prefix=None, suffix=None):
 		
 		"""Constructs a text for a tweet, based on the current Markov chain.
@@ -1338,7 +1336,7 @@ class MarkovBot():
 		
 		database		-	A string that indicates the name of the
 						specific database that you want to use to
-						generate the text, or u'default' to use the
+						generate the text, or 'default' to use the
 						default database. (default = 'default')
 
 		prefix		-	A string that will be added at the start of each
@@ -1355,17 +1353,17 @@ class MarkovBot():
 		"""
 
 		sl = 20
-		response = u''
-		while response == u'' or len(response) > 140:
+		response = ''
+		while response == '' or len(response) > 140:
 			# Generate some random text
 			response = self.generate_text(sl, seedword=seedword, \
 				database=database, verbose=False, maxtries=100)
 			# Add the prefix
 			if prefix != None:
-				response = u'%s %s' % (prefix, response)
+				response = '%s %s' % (prefix, response)
 			# Add the suffix
 			if suffix != None:
-				response = u'%s %s' % (response, suffix)
+				response = '%s %s' % (response, suffix)
 			# Reduce the amount of words if the response is too long
 			if len(response) > 140:
 				sl -= 1
@@ -1407,9 +1405,9 @@ class MarkovBot():
 						(True) or not (False).
 		"""
 		
-		if string.replace(u'.',u'').replace(u',',u'').replace(u';',u''). \
-			replace(u':',u'').replace(u'!',u'').replace(u'?',u''). \
-			replace(u"'",u'').isalpha():
+		if string.replace('.','').replace(',','').replace(';',''). \
+			replace(':','').replace('!','').replace('?',''). \
+			replace(u"'",'').isalpha():
 			return True
 		else:
 			return False
@@ -1473,7 +1471,37 @@ class MarkovBot():
 		
 		for i in range(len(words) - 2):
 			yield (words[i], words[i+1], words[i+2])
-
+	
+	
+	def _ntuples(self, words, n):
+	
+		"""Generate n-tuples from the word list
+		This is inspired by Shabda Raaj's blog on Markov text generation:
+		http://agiliq.com/blog/2009/06/generating-pseudo-random-text-with-markov-chains-u/
+		
+		Moves over the words, and returns n consecutive words at a time.
+		On each call, the function moves one word to the right. For example,
+		"What a lovely day" with n=3 would result in (What, a, lovely) on 
+		the first call, and in (a, lovely, day) on the next call.
+		
+		Arguments
+		
+		words		-	List of strings.
+		
+		n		    -	Length of the tuple.
+		
+		Yields
+		
+		(w1, w2, ..., wn)	-	Tuple of n consecutive words
+		"""
+		
+		# We can only do this trick if there are at least n words left
+		if len(words) < n:
+			return
+		
+		for i in range(len(words) - (n - 1)):
+			yield tuple(words[i:i+n])
+	
 	
 	def _twitter_reconnect(self):
 		
@@ -1483,12 +1511,12 @@ class MarkovBot():
 		"""
 		
 		# Report the reconnection attempt.
-		self._message(u'_twitter_reconnect', \
+		self._message('_twitter_reconnect', \
 			u"Attempting to reconnect to Twitter.")
 		
 		# Raise an Exception if the twitter library wasn't imported
 		if not IMPTWITTER:
-			self._error(u'_twitter_reconnect', u"The 'twitter' library could not be imported. Check whether it is installed correctly.")
+			self._error('_twitter_reconnect', u"The 'twitter' library could not be imported. Check whether it is installed correctly.")
 		
 		# Log in to a Twitter account
 		self._t = twitter.Twitter(auth=self._oauth)
@@ -1499,6 +1527,6 @@ class MarkovBot():
 		self._credentials = self._t.account.verify_credentials()
 		
 		# Report the reconnection success.
-		self._message(u'_twitter_reconnect', \
+		self._message('_twitter_reconnect', \
 			u"Successfully reconnected to Twitter!")
 		

@@ -46,10 +46,13 @@ class MarkovBot():
 	post updates to Twitter accounts.
 	"""
 	
-	def __init__(self):
+	def __init__(self, chainlength=3):
 		
 		"""Initialises the bot.
 		"""
+		
+		self.chainlength = chainlength
+		
 		
 		# # # # #
 		# DATA
@@ -219,60 +222,60 @@ class MarkovBot():
 		while error:
 			
 			try:
-				# Get all word duos in the database
+				# Get all word (n-1)-tuples in the database
 				keys = self.data[database].keys()
-				# Shuffle the word duos, so that not the same is
+				# Shuffle the word (n-1)-tuples, so that not the same is
 				# found every time
 				random.shuffle(keys)
 				
 				# Choose a random seed to fall back on when seedword does
 				# not occur in the keys, or if seedword==None
 				seed = random.randint(0, len(keys))
-				w1, w2 = keys[seed]
+				word_key = keys[seed]
 				
 				# Try to find a word duo that contains the seed word
 				if seedword != None:
 					# Loop through all potential seed words
 					while len(seedword) > 0:
-						# Loop through all keys (these are (w1,w2)
+						# Loop through all keys (these are (w1,w2,...,w(n-1))
 						# tuples of words that occurred together in the
-						# text used to generate the database
+						# text used to generate the database)
 						for i in xrange(len(keys)):
 							# If the seedword is only one word, check
-							# if it is part of the key (a word duo)
+							# if it is part of the key (a word tuple)
 							# If the seedword is a combination of words,
-							# check if they are the same as the key
-							if seedword[0] in keys[i] or \
-								(tuple(seedword[0].split(u' ')) == \
-								keys[i]):
+							# check if they are placed consecutively in the key
+							key_str = ' '.join(keys[i])
+							if key_str.startswith(seedword[0] + ' ') \
+								or key_str.endswith(' ' + seedword[0]) \
+								or (' ' + seedword[0] + ' ') in key_str:
 								# Choose the words
-								w1, w2 = keys[i]
+								word_key = keys[i]
 								# Get rid of the seedwords
 								seedword = []
 								break
 						# Get rid of the first keyword, if it was not
-						# found in the word duos
+						# found in the word tuples
 						if len(seedword) > 0:
 							seedword.pop(0)
 				
-				# Empty list to contain the generated words
-				words = []
+				# Generated words begin with those forming the key
+				words = list(word_key)
 				
 				# Loop to get as many words as requested
-				for i in xrange(maxlength):
-					# Add the current first word
-					words.append(w1)
-					# Generare a new first and second word, based on the
-					# database. Each key is a (w1,w2 tuple that points to
-					# a list of words that can follow the (w1, w2) word
+				for i in xrange(maxlength - len(word_key)):
+					# Generate a new word, based on the database.
+					# Each key is a (n-1)-tuple that points to
+					# a list of words that can follow the key word
 					# combination in the studied text. A random word from
 					# this list is selected. Note: words can occur more
 					# than once in this list, thus more likely word
 					# combinations are more likely to be selected here.
-					w1, w2 = w2, random.choice(self.data[database][(w1, w2)])
-				
-				# Add the final word to the generated words
-				words.append(w2)
+					next_word = random.choice(self.data[database][word_key])
+					# Add the new word
+					words.append(next_word)
+					# Update key
+					word_key = word_key[1:] + (next_word,)
 				
 				# Capitalise the first word, capitalise all single 'i's,
 				# and attempt to capitalise letters that occur after a
@@ -297,7 +300,7 @@ class MarkovBot():
 						ei = i+1
 					elif words[i][-1] in [u',', u';', u':']:
 						ei = i+1
-						words[i][-1] = u'.'
+						words[i] = words[i][:-1] + '.'
 					# Break if we found a word with interpunction.
 					if ei > 0:
 						break
@@ -390,21 +393,21 @@ class MarkovBot():
 			self.data[database] = {}
 		
 		# Add the words and their likely following word to the database
-		for w1, w2, w3 in self._triples(words):
+		for word_tuple in self._ntuples(words, n=self.chainlength):
 			# Only use actual words and words with minimal interpunction
-			if self._isalphapunct(w1) and self._isalphapunct(w2) and \
-				self._isalphapunct(w3):
-				# The key is a duo of words
-				key = (w1, w2)
+			if all(self._isalphapunct(w) for w in word_tuple):
+				# The last word is excluded and the rest of them from the key
+				lastword = word_tuple[-1]
+				key = word_tuple[:-1]
 				# Check if the key is already part of the database dict
 				if key in self.data[database]:
 					# If the key is already in the database dict,
 					# add the third word to the list
-					self.data[database][key].append(w3)
+					self.data[database][key].append(lastword)
 				else:
 					# If the key is not in the database dict yet, first
 					# make a new list for it, and then add the new word
-					self.data[database][key] = [w3]
+					self.data[database][key] = [lastword]
 	
 	
 	def read_pickle_data(self, filename, overwrite=False):
@@ -1293,7 +1296,7 @@ class MarkovBot():
 				# Report on the reviving.
 				self._message(u'_cpr', u'_tweetingthread died; trying to revive!')
 				# Restart the Thread.
-				self._tweetingthread = Thread(target=self._autoreply)
+				self._tweetingthread = Thread(target=self._autotweet)
 				self._tweetingthread.daemon = True
 				self._tweetingthread.name = u'autotweeter'
 				self._tweetingthread.start()
@@ -1469,7 +1472,37 @@ class MarkovBot():
 		
 		for i in range(len(words) - 2):
 			yield (words[i], words[i+1], words[i+2])
-
+	
+	
+	def _ntuples(self, words, n):
+	
+		"""Generate n-tuples from the word list
+		This is inspired by Shabda Raaj's blog on Markov text generation:
+		http://agiliq.com/blog/2009/06/generating-pseudo-random-text-with-markov-chains-u/
+		
+		Moves over the words, and returns n consecutive words at a time.
+		On each call, the function moves one word to the right. For example,
+		"What a lovely day" with n=3 would result in (What, a, lovely) on 
+		the first call, and in (a, lovely, day) on the next call.
+		
+		Arguments
+		
+		words		-	List of strings.
+		
+		n		    -	Length of the tuple.
+		
+		Yields
+		
+		(w1, w2, ..., wn)	-	Tuple of n consecutive words
+		"""
+		
+		# We can only do this trick if there are at least n words left
+		if len(words) < n:
+			return
+		
+		for i in range(len(words) - (n - 1)):
+			yield tuple(words[i:i+n])
+	
 	
 	def _twitter_reconnect(self):
 		
