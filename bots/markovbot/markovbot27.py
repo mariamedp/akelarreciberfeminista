@@ -40,7 +40,7 @@ except:
 	IMPTWITTER = False
 
 
-class MarkovBot():
+class MarkovBot(object):
 	
 	"""Class to generate text with a Markov chain, with support to read and
 	post updates to Twitter accounts.
