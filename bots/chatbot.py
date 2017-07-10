@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Bot de ejemplo para Twitter
-# Version 1.0 - Capaz de responder a otros perfiles, con autenticación segura
+# Version 1.1 - Capaz de responder a otros perfiles, con autenticación segura y longitud de cadena parametrizable
 
 import os
 import time
@@ -23,7 +23,7 @@ except IndexError:
 # INITIALISE
 
 # Initialise a MarkovBot instance
-tweetbot = MarkovBot()
+tweetbot = MarkovBot(chainlength=4)
 # Get the current directory's path
 dirname = os.path.dirname(os.path.abspath(__file__))
 # Construct the path to the book
