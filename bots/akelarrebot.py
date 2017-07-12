@@ -80,6 +80,8 @@ class AkelarreBot(MarkovBot):
 		
 		# Señal para que el hilo de autorecopilación empiece
 		self._autorecopilacion = True
+		
+		self._message(u'twitter_autorecopilaciontrolls_start', u"I'm ready! Waiting for invocations...")
 	
 	
 	def twitter_autorecopilaciontrolls_stop(self):
@@ -128,7 +130,6 @@ class AkelarreBot(MarkovBot):
 					# but can also raise a StopIteration Exception every now and again)
 					try:
 						tweet = next(tweet_iterator)
-						print("TW", tweet[u'text'])
 					except StopIteration:
 						# Restart the iterator, and skip the rest of the loop.
 						self._tslock.acquire(True)
@@ -178,73 +179,3 @@ class AkelarreBot(MarkovBot):
 						self.troll_data[troll[u'id_str']] = set(troll[u'screen_name'])
 						with open(self.recop_filepath, 'a') as f:
 							f.write(troll[u'id_str'] + "\n")		
-		
-
-
-		
-# Argumento de entrada: nombre del fichero .json con las credenciales de twitter
-try:
-	credentials_filename = sys.argv[1]
-	recopilacion_filename = sys.argv[2]
-except IndexError:
-	print('Error en la entrada: ' + sys.argv[0] + ' <fichero .json de credenciales de twitter> <fichero de listado de trolls>')
-	sys.exit(1)
-
-	
-	
-# # # # #
-# INITIALISE
-
-# Initialise a MarkovBot instance
-tweetbot = AkelarreBot(recopilacion_filename, chainlength=4)
-# Get the current directory's path
-dirname = os.path.dirname(os.path.abspath(__file__))
-# Construct the path to the book
-book = os.path.join(dirname, u'texto_ejemplo.txt')
-# Make your bot read the book!
-tweetbot.read(book)
-
-
-# # #
-# TEXT GENERATION
-
-# Generate text by using the generate_text method:
-# 	The first argument is the length of your text, in number of words
-# 	The 'seedword' argument allows you to feed the bot some words that it
-# 	should attempt to use to start its text. It's nothing fancy: the bot will
-# 	simply try the first, and move on to the next if he can't find something
-# 	that works.
-my_first_text = tweetbot.generate_text(25, seedword=[u'ella', u'Alicia'])
-
-# Print your text to the console
-print(u'\ntweetbot says: "%s"' % (my_first_text))
-
-# # #
-# TWITTER
-
-# The MarkovBot uses @sixohsix' Python Twitter Tools, which is a Python wrapper
-# for the Twitter API. Find it on GitHub: https://github.com/sixohsix/twitter
-
-# Credentials
-
-with open(credentials_filename, 'r') as f:
-	twitter_credentials = json.load(f)
-
-# Log in to Twitter
-tweetbot.twitter_login(twitter_credentials['consumer_key'], 
-                       twitter_credentials['consumer_secret'], 
-                       twitter_credentials['access_key'], 
-                       twitter_credentials['access_secret'])
-					   
-tweetbot.twitter_autorecopilaciontrolls_start("blublublu")
-
-# DO SOMETHING HERE TO ALLOW YOUR BOT TO BE ACTIVE IN THE BACKGROUND
-# You could, for example, wait for a week:
-secsinweek = 7 * 24 * 60 * 60
-time.sleep(secsinweek)
- 
-# Use the following to stop auto-responding
-# (Don't do this directly after starting it, or your bot will do nothing!)
-tweetbot.twitter_autorecopilaciontrolls_stop()
-
-
