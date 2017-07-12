@@ -25,4 +25,4 @@ import sys
 if sys.version_info[0] == 3:
     from .markovbot35 import MarkovBot
 else:
-    from markovbot27 import MarkovBot
+    from markovbot27 import MarkovBot, IMPTWITTER
