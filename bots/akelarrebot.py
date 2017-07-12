@@ -11,16 +11,25 @@ import json
 from threading import Thread, Lock
 
 from markovbot import MarkovBot, IMPTWITTER
-
+	
 ###
 
 class AkelarreBot(MarkovBot):
 	
-	def __init__(self, chainlength=3):
+	def __init__(self, recop_filepath, chainlength=3):
 		super(AkelarreBot, self).__init__(chainlength)
 		
-		self.troll_data = {}
+		# Comprobar que se puede escribir en el fichero
+		self.recop_filepath = recop_filepath
+		try:
+			with open(self.recop_filepath, 'a') as f:
+				f.write('')
+		except Exception as e:
+			print("Error al intentar escribir en el fichero de recopilación")
+			raise e
 		
+		self.troll_data = {}
+				
 		# Preparar el hilo de autorecopilación de trolls
 		self._autorecopilacion = False
 		self._autorecopilacion_keywords = None
@@ -35,9 +44,9 @@ class AkelarreBot(MarkovBot):
 		
 		if IMPTWITTER:
 			self._autorecopilacionthread.start()
+	
 		
-		
-	def twitter_autorecopilaciontrolls_start(self, hechizos_invocacion, repo):
+	def twitter_autorecopilaciontrolls_start(self, hechizos_invocacion):
 		
 		"""Inicia el hilo interno que escucha el hechizo de invocación
 		e incorpora a la lista de trolls la cuenta del tweet al que se esté contestando.
@@ -46,8 +55,6 @@ class AkelarreBot(MarkovBot):
 		
 		hechizo_invocacion	-	Lista de palabra(s) que se van a utilizar para marcar un troll
 		                        y de las que hay que realizar seguimiento.
-		
-		repo            	-	BLA
 		
 		"""
 		
@@ -60,21 +67,16 @@ class AkelarreBot(MarkovBot):
 		if not self._loggedin:
 			self._message(u'twitter_autorecopilaciontrolls_start', \
 				u"Not logged in to Twitter yet. I'll wait until you call the twitter_login() function...")
-		
-		
-		#TODO Control errores
-		
-		# hechizos_invocacion tiene que ser un string con las keywords separadas por , 
+				
+		# hechizos_invocacion tiene que ser un string con las keywords separadas por ","
 		# (formato para el método track de la Api Streaming de Twitter)
 		if type(hechizos_invocacion) in [str, unicode]:
 			hechizos_invocacion = hechizos_invocacion.replace(',', '')
 		else:
 			hechizos_invocacion = ','.join([h.replace(',', '') for h in hechizos_invocacion])
 		
-		
 		# Actualizar parámetros 
 		self._autorecopilacion_keywords = hechizos_invocacion
-		#TODO repo
 		
 		# Señal para que el hilo de autorecopilación empiece
 		self._autorecopilacion = True
@@ -84,11 +86,6 @@ class AkelarreBot(MarkovBot):
 		
 		"""Desactiva el hilo de recopilación de trolls.
 		"""
-		
-		# Raise an Exception if the twitter library wasn't imported
-		if not IMPTWITTER:
-			self._error(u'twitter_autorecopilaciontrolls_stop', \
-				u"The 'twitter' library could not be imported. Check whether it is installed correctly.")
 		
 		# Actualizar parámetros
 		self._autorecopilacion_keywords = None
@@ -164,9 +161,7 @@ class AkelarreBot(MarkovBot):
 						self._message(u'_autorecopilaciontrolls', \
 							u"This tweet was not a reply. Skipping...")
 						continue
-						
-					print(tweet_original)
-					
+										
 					self._tlock.acquire(True)
 					tweet_original = self._t.statuses.show(id=tweet_original)
 					self._tlock.release()
@@ -176,19 +171,23 @@ class AkelarreBot(MarkovBot):
 					if troll[u'id_str'] in self.troll_data.keys():
 						self._message(u'_autorecopilaciontrolls', \
 							u"Found troll! Already in the database, updating information.")
+						self.troll_data[troll[u'id_str']].add(troll[u'screen_name'])
 					else:
 						self._message(u'_autorecopilaciontrolls', \
-							u"Found new troll! Handle: " + troll[u'screen_name'] + ". Adding it to the database.")
-					
-					self.troll_data[troll[u'id_str']] = troll
-					
+							u"Found new troll! Handle: " + troll[u'screen_name'] + ". Adding it to the database and updating file.")
+						self.troll_data[troll[u'id_str']] = set(troll[u'screen_name'])
+						with open(self.recop_filepath, 'a') as f:
+							f.write(troll[u'id_str'] + "\n")		
 		
 
+
+		
 # Argumento de entrada: nombre del fichero .json con las credenciales de twitter
 try:
-	text_filename = sys.argv[1]
+	credentials_filename = sys.argv[1]
+	recopilacion_filename = sys.argv[2]
 except IndexError:
-	print('Error: falta indicar el nombre del fichero .json con las credenciales de twitter')
+	print('Error en la entrada: ' + sys.argv[0] + ' <fichero .json de credenciales de twitter> <fichero de listado de trolls>')
 	sys.exit(1)
 
 	
@@ -197,7 +196,7 @@ except IndexError:
 # INITIALISE
 
 # Initialise a MarkovBot instance
-tweetbot = AkelarreBot(chainlength=4)
+tweetbot = AkelarreBot(recopilacion_filename, chainlength=4)
 # Get the current directory's path
 dirname = os.path.dirname(os.path.abspath(__file__))
 # Construct the path to the book
@@ -228,7 +227,7 @@ print(u'\ntweetbot says: "%s"' % (my_first_text))
 
 # Credentials
 
-with open(text_filename, 'r') as f:
+with open(credentials_filename, 'r') as f:
 	twitter_credentials = json.load(f)
 
 # Log in to Twitter
@@ -237,7 +236,7 @@ tweetbot.twitter_login(twitter_credentials['consumer_key'],
                        twitter_credentials['access_key'], 
                        twitter_credentials['access_secret'])
 					   
-tweetbot.twitter_autorecopilaciontrolls_start("blublublu", repo=None)
+tweetbot.twitter_autorecopilaciontrolls_start("blublublu")
 
 # DO SOMETHING HERE TO ALLOW YOUR BOT TO BE ACTIVE IN THE BACKGROUND
 # You could, for example, wait for a week:
